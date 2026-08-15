@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /siparis-takip.html
+
+Sitemap: https://3doku.com.tr/sitemap.xml

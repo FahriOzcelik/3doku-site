@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ödeme Tamamlanamadı — 3Doku</title>
+<meta name="robots" content="noindex" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:#F4F5F2; color:#0A2C42; font-family:'Inter',sans-serif; padding:24px;
+  }
+  .box{ max-width:420px; text-align:center; background:#fff; border:1px solid #E3E4DE; border-radius:18px; padding:40px 32px; }
+  .icon{ width:56px; height:56px; border-radius:50%; background:#C4402F; color:#fff; display:flex; align-items:center; justify-content:center; font-size:26px; margin:0 auto 20px; }
+  h1{ font-family:'Space Grotesk',sans-serif; font-size:22px; margin:0 0 10px; }
+  p{ font-size:14px; color:#4A555E; line-height:1.6; margin:0 0 24px; }
+  .btn-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  a.btn{
+    display:inline-block; text-decoration:none; padding:12px 22px; border-radius:10px; font-weight:600; font-size:14px;
+  }
+  a.btn-primary{ background:#0A2C42; color:#fff; }
+  a.btn-secondary{ background:#fff; color:#0A2C42; border:1px solid #E3E4DE; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">✕</div>
+    <h1>Ödeme tamamlanamadı</h1>
+    <p>Kartınızdan çekim yapılamadı ya da işlem iptal edildi. Sepetiniz hâlâ duruyor, tekrar deneyebilir ya da WhatsApp üzerinden bize ulaşabilirsiniz.</p>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="/">Tekrar Dene</a>
+      <a class="btn btn-secondary" href="https://wa.me/905445844552" target="_blank" rel="noopener">WhatsApp</a>
+    </div>
+  </div>
+</body>
+</html>
