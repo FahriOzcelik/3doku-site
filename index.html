@@ -359,6 +359,12 @@
   .foot-contact a{ color:var(--accent); text-decoration:none; }
   .foot-contact a:hover{ text-decoration:underline; }
   .foot-admin{ font-size:11px; color:var(--ink-soft); text-decoration:none; }
+  .foot-legal{
+    max-width:1180px; margin:0 auto; padding:16px 24px 28px; border-top:1px solid var(--line);
+    display:flex; gap:18px; flex-wrap:wrap; font-size:12px;
+  }
+  .foot-legal a{ color:var(--ink-soft); text-decoration:none; }
+  .foot-legal a:hover{ color:var(--ink); text-decoration:underline; }
 </style>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-D33BTPEXCY"></script>
@@ -515,7 +521,7 @@
       </div>
 
       <div id="cart-actions">
-        <button type="button" class="btn btn-primary" id="cart-checkout-btn" style="width:100%; justify-content:center;">Kartla Öde</button>
+        <button type="button" class="btn btn-primary" id="cart-checkout-btn" style="width:100%; justify-content:center; display:none;">Kartla Öde</button>
         <a class="btn btn-primary" id="cart-order-btn" href="#" style="justify-content:center; margin-top:10px;">Sipariş İçin Yaz</a>
         <button type="button" class="btn-cancel" id="cart-copy-btn" style="width:100%; justify-content:center; display:flex; margin-top:10px;">Listeyi Kopyala</button>
         <div class="add-cart-feedback mono" id="cart-copy-feedback" style="text-align:center;"></div>
@@ -629,6 +635,13 @@
 
       <a class="foot-admin" href="#" id="foot-admin">Yönetici Paneli →</a>
     </div>
+  </div>
+  <div class="foot-legal">
+    <a href="/hakkimizda.html">Hakkımızda</a>
+    <a href="/iletisim.html">İletişim</a>
+    <a href="/gizlilik-politikasi.html">Gizlilik Politikası</a>
+    <a href="/mesafeli-satis-sozlesmesi.html">Mesafeli Satış Sözleşmesi</a>
+    <a href="/teslimat-ve-iade.html">Teslimat ve İade</a>
   </div>
 </footer>
 
@@ -1098,7 +1111,6 @@
     document.getElementById('cart-empty').style.display = cart.length ? 'none' : '';
     document.getElementById('clear-cart-btn').style.display = cart.length ? '' : 'none';
     document.getElementById('cart-total-row').style.display = cart.length ? 'flex' : 'none';
-    document.getElementById('cart-checkout-btn').style.display = cart.length ? '' : 'none';
     document.getElementById('cart-order-btn').style.display = cart.length ? '' : 'none';
     document.getElementById('cart-copy-btn').style.display = cart.length ? 'flex' : 'none';
     wrap.innerHTML = cart.map(function(item){

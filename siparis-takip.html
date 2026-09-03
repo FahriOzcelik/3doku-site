@@ -847,41 +847,20 @@
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important;}
   }
-
 /* ---------- Auth gate ---------- */
-.auth-gate{
-  position:fixed; inset:0; z-index:500; background:var(--paper);
-  display:flex; align-items:center; justify-content:center; padding:20px;
-}
-.auth-box{
-  width:100%; max-width:360px; background:var(--paper-raised); border:1px solid var(--line);
-  border-radius:14px; padding:32px 28px; box-shadow:var(--shadow-lift); text-align:center;
-}
-.auth-box .eyebrow{
-  font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.16em; text-transform:uppercase;
-  color:var(--gold); margin:0 0 6px;
-}
-.auth-box h2{ font-family:'Zilla Slab', serif; font-size:22px; margin:0 0 6px; color:var(--ink); }
+.auth-gate{ position:fixed; inset:0; z-index:500; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:20px; }
+.auth-box{ width:100%; max-width:360px; background:var(--paper-raised); border:1px solid var(--line); border-radius:14px; padding:32px 28px; box-shadow:var(--shadow-lift); text-align:center; }
+.auth-box .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--gold); margin:0 0 6px; }
+.auth-box h2{ font-family:'Zilla Slab',serif; font-size:22px; margin:0 0 6px; color:var(--ink); }
 .auth-sub{ font-size:13px; color:var(--ink-soft); margin:0 0 22px; }
 .auth-field{ text-align:left; margin-bottom:14px; }
 .auth-field label{ display:block; font-size:12px; font-weight:600; color:var(--ink); margin-bottom:6px; }
-.auth-field input{
-  width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px;
-  font-family:'Inter',sans-serif; font-size:14px; background:#fff; color:var(--ink); box-sizing:border-box;
-}
-.auth-box button{
-  width:100%; padding:12px; border:none; border-radius:9px; background:var(--ink); color:var(--paper-raised);
-  font-family:'Inter',sans-serif; font-size:14px; font-weight:600; cursor:pointer; margin-top:4px;
-}
+.auth-field input{ width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; font-family:'Inter',sans-serif; font-size:14px; background:#fff; color:var(--ink); box-sizing:border-box; }
+.auth-box button{ width:100%; padding:12px; border:none; border-radius:9px; background:var(--ink); color:var(--paper-raised); font-family:'Inter',sans-serif; font-size:14px; font-weight:600; cursor:pointer; margin-top:4px; }
 .auth-box button:hover{ opacity:0.92; }
 .auth-box button:disabled{ opacity:0.6; cursor:default; }
 .auth-err{ color:#B5473A; font-size:13px; margin-top:10px; min-height:16px; }
-.auth-logout-btn{
-  position:fixed; top:16px; right:16px; z-index:400;
-  background:var(--paper-raised); border:1px solid var(--line); border-radius:100px;
-  padding:8px 16px; font-size:12px; font-weight:600; color:var(--ink-soft);
-  font-family:'Inter',sans-serif; cursor:pointer; box-shadow:var(--shadow);
-}
+.auth-logout-btn{ position:fixed; top:16px; right:16px; z-index:400; background:var(--paper-raised); border:1px solid var(--line); border-radius:100px; padding:8px 16px; font-size:12px; font-weight:600; color:var(--ink-soft); font-family:'Inter',sans-serif; cursor:pointer; box-shadow:var(--shadow); }
 .auth-logout-btn:hover{ color:var(--ink); border-color:var(--ink); }
 </style>
 </head>
@@ -920,8 +899,6 @@
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
 
-  // Drop-in replacement for the Claude.ai artifact `window.storage` API, backed by Supabase.
-  // Same get(key)/set(key,value) shape the rest of this file already expects, so no app logic changes.
   window.storage = {
     get: async function(key){
       if(!sb) return null;
@@ -930,10 +907,7 @@
         if(res.error) throw res.error;
         if(!res.data) return null;
         return { key: key, value: res.data.value };
-      }catch(e){
-        console.error('storage.get error', key, e);
-        return null;
-      }
+      }catch(e){ console.error('storage.get error', key, e); return null; }
     },
     set: async function(key, value){
       if(!sb) return null;
@@ -941,10 +915,7 @@
         var res = await sb.from('admin_data').upsert({ key: key, value: String(value), updated_at: new Date().toISOString() });
         if(res.error) throw res.error;
         return { key: key, value: value };
-      }catch(e){
-        console.error('storage.set error', key, e);
-        return null;
-      }
+      }catch(e){ console.error('storage.set error', key, e); return null; }
     }
   };
 
@@ -990,10 +961,7 @@
     if(!sb){ showAuthGate(); return; }
     try{
       var sessionRes = await sb.auth.getSession();
-      if(sessionRes.data && sessionRes.data.session){
-        grantAccess();
-        return;
-      }
+      if(sessionRes.data && sessionRes.data.session){ grantAccess(); return; }
     }catch(e){}
     showAuthGate();
   }
@@ -1032,7 +1000,8 @@ let state = {
   failedPrints: [], // [{id, date, productId, productName, materialId, materialName, colorId, colorName, colorHex, gramsLost, hoursLost, reason, expenseId}]
   productionOrder: [],  // ["orderId::itemId", ...] üretim önceliği sırası
   productionFilter: 'active', // 'active' | 'all'
-  view: 'orders',      // 'orders' | 'production' | 'products' | 'materials' | 'colors' | 'finance'
+  view: 'orders',      // 'orders' | 'production' | 'products' | 'materials' | 'colors' | 'finance' | 'partnership'
+  partnershipMonth: null,
   search: "",
   statusFilter: "all",
   loaded: false,
@@ -4205,7 +4174,8 @@ function render(){
       <button class="view-tab ${state.view==='costcalc'?'active':''}" onclick="switchView('costcalc')">${iconCalculator()} Maliyet Hesabı</button>
       <button class="view-tab ${state.view==='failedprints'?'active':''}" onclick="switchView('failedprints')">${iconAlertTriangle()} Başarısız Baskılar</button>
       <button class="view-tab ${state.view==='profitability'?'active':''}" onclick="switchView('profitability')">${iconTrendUp()} Kârlılık</button>
-      <button class="view-tab ${state.view==='finance'?'active':''}" onclick="switchView('finance')">${iconBanknote()} Aylık Gelir-Gider Tablosu</button>
+      <button class="view-tab ${state.view==='partnership'?'active':''}" onclick="switchView('partnership')">${iconBanknote()} Kar Paylaşımı</button>
+      <button class="view-tab ${state.view==='finance'?'active':''}\" onclick="switchView('finance')">${iconBanknote()} Aylık Gelir-Gider Tablosu</button>
     </div>
 
     ${state.view === 'orders' ? renderOrdersView()
@@ -4218,6 +4188,7 @@ function render(){
       : state.view === 'costcalc' ? renderCostCalcView()
       : state.view === 'failedprints' ? renderFailedPrintsView()
       : state.view === 'profitability' ? renderProfitabilityView()
+      : state.view === 'partnership' ? renderPartnershipView()
       : renderFinanceView()}
 
     ${renderModal()}
@@ -5082,9 +5053,11 @@ function renderOrdersView(){
         ${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${state.statusFilter===k?'selected':''}>${v.label}</option>`).join('')}
       </select>
       <button class="btn-new" onclick="openNewModal()">${iconPlus()} Yeni Sipariş</button>
-      <button class="btn-secondary" style="padding:11px 16px;" onclick="exportBackup()" title="Tüm siparişleri JSON dosyası olarak indir">${iconDownload()} Yedek İndir</button>
+      ${!storageUsable() ? `
+      <button class="btn-secondary" style="padding:11px 16px;" onclick="exportBackup()" title="Tüm siparişleri JSON dosyası olarak indir">${iconDownload()} ${state.autoBackupActive ? 'Ek Kopya İndir' : 'Yedek İndir'}</button>
       <button class="btn-secondary" style="padding:11px 16px;" onclick="document.getElementById('import-file').click()" title="Daha önce indirdiğiniz yedek dosyasını yükle">${iconUpload()} Yedek Yükle</button>
       <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importBackup(event)">
+      ` : ''}
     </div>
 
     <div class="ledger-table">
@@ -5333,6 +5306,265 @@ function renderFinanceView(){
         </tbody>
       </table>
       `}
+    </div>
+  `;
+}
+
+// ============================================================
+// KAR PAYLAŞIM MODÜLÜ — F, H, Sipariş Alan (%50/%25/%25)
+// ============================================================
+
+// Ortak tanımları (isimleri kolayca değiştirmek için)
+const PARTNER = {
+  F: 'F (Üretici)',
+  H: 'H (Sermaye)'
+};
+
+function computePartnershipReport(filterMonth){
+  // filterMonth: 'YYYY-MM' formatında (örn '2026-08'), null ise tüm zamanlar
+
+  const inMonth = (dateStr) => {
+    if(!filterMonth) return true;
+    return (dateStr||'').startsWith(filterMonth);
+  };
+
+  // 1) Teslim edilmiş siparişlerden gelir + sipariş alanlar
+  let totalRevenue = 0;
+  const orderLines = []; // { orderNo, customerName, revenue, takenBy }
+
+  state.orders.forEach(o => {
+    if(o.status !== 'teslim') return; // sadece teslim edilmiş
+    if(!inMonth(o.orderDate)) return;
+    const revenue = Number(o.paidAmount) || 0;
+    totalRevenue += revenue;
+    orderLines.push({
+      orderNo: o.orderNo,
+      customerName: o.customerName,
+      revenue,
+      takenBy: (o.takenBy || '').trim() || null
+    });
+  });
+
+  // 2) Tüm giderler (filament, fire dahil)
+  let totalExpenses = 0;
+  const expenseLines = [];
+
+  // Normal giderler
+  state.expenses.forEach(ex => {
+    if(!inMonth(ex.date)) return;
+    const amt = Number(ex.amount) || 0;
+    totalExpenses += amt;
+    expenseLines.push({
+      date: ex.date,
+      description: ex.description,
+      amount: amt,
+      person: ex.person || '-'
+    });
+  });
+
+  // Başarısız baskılar (fire) — gider olarak sayılır
+  state.failedPrints && state.failedPrints.forEach(fp => {
+    if(!inMonth(fp.date)) return;
+    // Tahmini maliyet: gram kaybı + saat kaybı
+    const mat = state.materials && state.materials.find(m => m.id === fp.materialId);
+    const pricePerKg = mat ? (Number(mat.pricePerKg)||0) : 0;
+    const gramsLost = Number(fp.gramsLost) || 0;
+    const hoursLost = Number(fp.hoursLost) || 0;
+    const materialLoss = (gramsLost / 1000) * pricePerKg;
+    const timeLoss = hoursLost * hourlyOperatingCost();
+    const total = materialLoss + timeLoss;
+    if(total <= 0) return;
+    totalExpenses += total;
+    expenseLines.push({
+      date: fp.date,
+      description: `Fire: ${fp.productName || '?'} (${gramsLost}g, ${hoursLost}sa)`,
+      amount: total,
+      person: 'F' // fire üreticide
+    });
+  });
+
+  // 3) Net kar
+  const netProfit = totalRevenue - totalExpenses;
+
+  // 4) Kişi başı işçilik (ücret) = F'e yazılan giderler içindeki işçilik
+  // (Sistem giderleri zaten kişiye göre bölünmüş durumda)
+
+  // 5) Kar paylaşımı hesabı
+  // Her sipariş için:
+  //   - Siparişi alan belli -> o kişi %50, diğerleri %25
+  //   - Belli değil -> 3'e eşit (%33.33)
+  const shares = { F: 0, H: 0, ALAN: 0, ALAN_NAME: {} };
+
+  orderLines.forEach(ol => {
+    const orderShare = netProfit === 0 ? 0 : (ol.revenue / (totalRevenue || 1)) * netProfit;
+    const taken = ol.takenBy;
+    const knownPartners = ['F', 'H'];
+    const isKnownPartner = taken && knownPartners.includes(taken);
+    const isOther = taken && !isKnownPartner; // F veya H dışında biri aldıysa
+
+    if(!taken || (!isKnownPartner && !isOther)){
+      // Belli değil — 3'e böl
+      shares.F += orderShare * (1/3);
+      shares.H += orderShare * (1/3);
+      shares.ALAN += orderShare * (1/3);
+      const k = 'Belirsiz';
+      shares.ALAN_NAME[k] = (shares.ALAN_NAME[k]||0) + orderShare * (1/3);
+    } else {
+      // F veya H aldıysa o kişi %50, diğer partner %25, "3. kişi" %25
+      const takerShare = orderShare * 0.5;
+      const otherPartnerShare = orderShare * 0.25;
+      const thirdShare = orderShare * 0.25;
+
+      if(taken === 'F'){
+        shares.F += takerShare + otherPartnerShare; // F hem üretici hem alan
+        shares.H += otherPartnerShare;
+        shares.ALAN += thirdShare;
+        shares.ALAN_NAME['F'] = (shares.ALAN_NAME['F']||0) + thirdShare;
+      } else if(taken === 'H'){
+        shares.H += takerShare;
+        shares.F += otherPartnerShare; // F üretici olarak
+        shares.ALAN += thirdShare;
+        const k = 'H';
+        shares.ALAN_NAME[k] = (shares.ALAN_NAME[k]||0) + thirdShare;
+      } else {
+        // Başka biri (örn. 'A') aldı
+        shares.F += otherPartnerShare;
+        shares.H += otherPartnerShare;
+        shares.ALAN += takerShare;
+        shares.ALAN_NAME[taken] = (shares.ALAN_NAME[taken]||0) + takerShare;
+      }
+    }
+  });
+
+  return {
+    totalRevenue,
+    totalExpenses,
+    netProfit,
+    shares,
+    orderLines,
+    expenseLines
+  };
+}
+
+function renderPartnershipView(){
+  const months = [];
+  const seen = new Set();
+  [...state.orders, ...state.expenses].forEach(r => {
+    const d = r.orderDate || r.date || '';
+    const m = d.slice(0,7);
+    if(m && !seen.has(m)){ seen.add(m); months.push(m); }
+  });
+  months.sort((a,b) => b.localeCompare(a));
+
+  const selectedMonth = state.partnershipMonth || (months[0] || null);
+  const r = computePartnershipReport(selectedMonth);
+
+  const monthLabel = selectedMonth
+    ? new Date(selectedMonth+'-01').toLocaleDateString('tr-TR',{year:'numeric',month:'long'})
+    : 'Tüm Zamanlar';
+
+  const alanBreakdown = Object.entries(r.shares.ALAN_NAME)
+    .map(([k,v]) => `<span class="taken-chip">${escapeHtml(k)}</span> ${fmtMoney(v)}`)
+    .join(', ') || '—';
+
+  return `
+    <div class="toolbar">
+      <div style="font-size:13px; font-weight:600; flex:1;">Ortaklık Kar Paylaşımı</div>
+      <select onchange="state.partnershipMonth=this.value;render();" style="border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:13px; background:#fff; cursor:pointer;">
+        <option value="">Tüm Zamanlar</option>
+        ${months.map(m => `<option value="${m}" ${m===selectedMonth?'selected':''}>${new Date(m+'-01').toLocaleDateString('tr-TR',{year:'numeric',month:'long'})}</option>`).join('')}
+      </select>
+    </div>
+
+    <p style="font-size:12px; color:var(--ink-soft); margin:0 0 20px;">
+      Sadece <strong>teslim edilmiş</strong> siparişler gelir olarak sayılır. Filament, fire ve tüm giderler düşüldükten sonraki net kar paylaşılır.
+      Siparişi alan belli ise <strong>%50</strong>, diğer iki ortak <strong>%25</strong> alır. Alan belli değilse kar üçe eşit bölünür.
+    </p>
+
+    <div class="finance-cards" style="margin-bottom:20px;">
+      <div class="fcard income"><div class="fl">Toplam Gelir <span style="font-size:11px; opacity:.7;">(teslim)</span></div><div class="fn">${fmtMoney(r.totalRevenue)}</div></div>
+      <div class="fcard expense"><div class="fl">Toplam Gider + Fire</div><div class="fn">${fmtMoney(r.totalExpenses)}</div></div>
+      <div class="fcard net"><div class="fl">Net Kar (Paylaşılacak)</div><div class="fn ${r.netProfit>=0?'net-pos':'net-neg'}">${fmtMoney(r.netProfit)}</div></div>
+    </div>
+
+    <div class="finance-section-title">Kişi Payları — ${escapeHtml(monthLabel)}</div>
+    <div class="ledger-table" style="margin-bottom:24px;">
+      <table>
+        <thead><tr><th>Ortak</th><th>Rol</th><th>Pay Oranı</th><th>Tutar</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="taken-chip">F</span></td>
+            <td style="font-size:13px; color:var(--ink-soft);">Üretici + Sermaye</td>
+            <td>Değişken</td>
+            <td><span class="amount net-pos">${fmtMoney(r.shares.F)}</span></td>
+          </tr>
+          <tr>
+            <td><span class="taken-chip">H</span></td>
+            <td style="font-size:13px; color:var(--ink-soft);">Sermaye</td>
+            <td>Değişken</td>
+            <td><span class="amount net-pos">${fmtMoney(r.shares.H)}</span></td>
+          </tr>
+          <tr>
+            <td><span class="taken-chip">Sipariş Alan</span></td>
+            <td style="font-size:13px; color:var(--ink-soft);">${alanBreakdown}</td>
+            <td>%50 (alan) / ⅓ (belirsiz)</td>
+            <td><span class="amount net-pos">${fmtMoney(r.shares.ALAN)}</span></td>
+          </tr>
+          <tr style="background:var(--gold-soft);">
+            <td colspan="3"><strong>Toplam</strong></td>
+            <td><span class="amount">${fmtMoney(r.shares.F + r.shares.H + r.shares.ALAN)}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="finance-section-title">Sipariş Detayı (Teslim Edilenler)</div>
+    <div class="ledger-table" style="margin-bottom:24px;">
+      ${r.orderLines.length === 0 ? `<div class="empty-state">${iconInbox()}<p class="stamp">Bu dönemde teslim edilmiş sipariş yok</p></div>` : `
+      <table>
+        <thead><tr><th>Sipariş No</th><th>Müşteri</th><th>Alan</th><th>Tahsil</th><th>F Payı</th><th>H Payı</th><th>Alan Payı</th></tr></thead>
+        <tbody>
+          ${r.orderLines.map(ol => {
+            const orderShare = r.netProfit === 0 ? 0 : (ol.revenue / (r.totalRevenue||1)) * r.netProfit;
+            const taken = (ol.takenBy||'').trim();
+            let fP, hP, aP;
+            if(!taken || (taken !== 'F' && taken !== 'H' && taken === '')){
+              fP = hP = aP = orderShare/3;
+            } else if(taken === 'F'){
+              fP = orderShare * 0.75; hP = orderShare * 0.25; aP = 0;
+            } else if(taken === 'H'){
+              fP = orderShare * 0.25; hP = orderShare * 0.75; aP = 0;
+            } else {
+              fP = orderShare * 0.25; hP = orderShare * 0.25; aP = orderShare * 0.5;
+            }
+            return `<tr>
+              <td data-label="Sipariş No">${escapeHtml(ol.orderNo||'-')}</td>
+              <td data-label="Müşteri" class="cust-name">${escapeHtml(ol.customerName||'-')}</td>
+              <td data-label="Alan"><span class="taken-chip">${escapeHtml(ol.takenBy||'?')}</span></td>
+              <td data-label="Tahsil"><span class="amount">${fmtMoney(ol.revenue)}</span></td>
+              <td data-label="F Payı"><span class="amount net-pos">${fmtMoney(fP)}</span></td>
+              <td data-label="H Payı"><span class="amount net-pos">${fmtMoney(hP)}</span></td>
+              <td data-label="Alan Payı"><span class="amount net-pos">${fmtMoney(aP)}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`}
+    </div>
+
+    <div class="finance-section-title">Gider ve Fire Detayı</div>
+    <div class="ledger-table">
+      ${r.expenseLines.length === 0 ? `<div class="empty-state">${iconInbox()}<p class="stamp">Bu dönemde gider kaydı yok</p></div>` : `
+      <table>
+        <thead><tr><th>Tarih</th><th>Kişi</th><th>Açıklama</th><th>Tutar</th></tr></thead>
+        <tbody>
+          ${r.expenseLines.map(ex => `<tr>
+            <td data-label="Tarih">${fmtDate(ex.date)}</td>
+            <td data-label="Kişi"><span class="taken-chip">${escapeHtml(ex.person)}</span></td>
+            <td data-label="Açıklama">${escapeHtml(ex.description)}</td>
+            <td data-label="Tutar"><span class="amount" style="color:var(--rust);">${fmtMoney(ex.amount)}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
     </div>
   `;
 }
