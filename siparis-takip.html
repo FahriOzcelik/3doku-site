@@ -5320,125 +5320,173 @@ const PARTNER = {
   H: 'H (Sermaye)'
 };
 
-function computePartnershipReport(filterMonth){
-  // filterMonth: 'YYYY-MM' formatında (örn '2026-08'), null ise tüm zamanlar
+// Gider türünü tespit et: 'electricity'(elektrik/işletme) | 'filament'(filament/fire) | 'other'
+function classifyExpense(description, person){
+  const d = (description||'').toLowerCase();
+  if(d.includes('elektrik') || d.includes('electric') || d.includes('enerji') || d.includes('fatura'))
+    return 'electricity';
+  if(d.includes('filament') || d.includes('fire') || d.includes('malzeme') || d.includes('materyal') || d.includes('hammadde'))
+    return 'filament';
+  return 'other'; // kişiye göre
+}
 
+// Bir gider kalemini F/H'ye böler; döner { F, H }
+function splitExpense(amount, description, person){
+  const type = classifyExpense(description, person);
+  if(type === 'electricity'){
+    return { F: amount, H: 0, label: 'Elektrik/İşletme → F' };
+  } else if(type === 'filament'){
+    return { F: amount * 0.5, H: amount * 0.5, label: 'Filament/Fire → F+H' };
+  } else {
+    // other: kişiye göre
+    if(person === 'F') return { F: amount, H: 0, label: `Diğer → ${person}` };
+    if(person === 'H') return { F: 0, H: amount, label: `Diğer → ${person}` };
+    return { F: amount * 0.5, H: amount * 0.5, label: `Diğer → Paylaşım` };
+  }
+}
+
+function computePartnershipReport(filterMonth){
   const inMonth = (dateStr) => {
     if(!filterMonth) return true;
     return (dateStr||'').startsWith(filterMonth);
   };
 
-  // 1) Teslim edilmiş siparişlerden gelir + sipariş alanlar
+  // 1) Teslim edilmiş siparişlerden gelir
   let totalRevenue = 0;
-  const orderLines = []; // { orderNo, customerName, revenue, takenBy }
+  const orderLines = [];
 
   state.orders.forEach(o => {
-    if(o.status !== 'teslim') return; // sadece teslim edilmiş
+    if(o.status !== 'teslim') return;
     if(!inMonth(o.orderDate)) return;
     const revenue = Number(o.paidAmount) || 0;
+
+    // Siparişe özgü üretim maliyeti (filament + elektrik)
+    let orderFilament = 0; // filament maliyeti → F+H eşit
+    let orderElectric = 0; // elektrik/işletme  → sadece F
+
+    (o.items||[]).forEach(it => {
+      const product = state.products && state.products.find(p => p.id === it.productId);
+      if(!product) return;
+      const qty = itemQuantity(it);
+      const gramPerUnit = Number(product.gramPerUnit)||0;
+      const hoursPerUnit = Number(product.printHoursPerUnit)||0;
+      const material = it.materialId
+        ? (state.materials && state.materials.find(m => m.id === it.materialId))
+        : null;
+      const pricePerKg = material ? (Number(material.pricePerKg)||0) : 0;
+      orderFilament += (gramPerUnit * qty / 1000) * pricePerKg;
+      orderElectric += hoursPerUnit * qty * hourlyOperatingCost();
+    });
+
     totalRevenue += revenue;
     orderLines.push({
       orderNo: o.orderNo,
       customerName: o.customerName,
       revenue,
-      takenBy: (o.takenBy || '').trim() || null
+      takenBy: (o.takenBy || '').trim() || null,
+      orderFilament,
+      orderElectric,
+      orderCost: orderFilament + orderElectric,
     });
   });
 
-  // 2) Tüm giderler (filament, fire dahil)
-  let totalExpenses = 0;
+  // 2) Dönem giderleri (filament/fire kayıtları + manuel giderler)
+  let totalPeriodExpenses = 0;
   const expenseLines = [];
 
-  // Normal giderler
+  // Manuel giderler
   state.expenses.forEach(ex => {
     if(!inMonth(ex.date)) return;
     const amt = Number(ex.amount) || 0;
-    totalExpenses += amt;
+    totalPeriodExpenses += amt;
+    const split = splitExpense(amt, ex.description, ex.person);
     expenseLines.push({
       date: ex.date,
       description: ex.description,
       amount: amt,
-      person: ex.person || '-'
+      splitLabel: split.label,
+      F: split.F,
+      H: split.H
     });
   });
 
-  // Başarısız baskılar (fire) — gider olarak sayılır
-  state.failedPrints && state.failedPrints.forEach(fp => {
+  // Başarısız baskılar (fire)
+  (state.failedPrints||[]).forEach(fp => {
     if(!inMonth(fp.date)) return;
-    // Tahmini maliyet: gram kaybı + saat kaybı
     const mat = state.materials && state.materials.find(m => m.id === fp.materialId);
     const pricePerKg = mat ? (Number(mat.pricePerKg)||0) : 0;
     const gramsLost = Number(fp.gramsLost) || 0;
     const hoursLost = Number(fp.hoursLost) || 0;
-    const materialLoss = (gramsLost / 1000) * pricePerKg;
+    const matLoss = (gramsLost / 1000) * pricePerKg;
     const timeLoss = hoursLost * hourlyOperatingCost();
-    const total = materialLoss + timeLoss;
+    const total = matLoss + timeLoss;
     if(total <= 0) return;
-    totalExpenses += total;
+    totalPeriodExpenses += total;
     expenseLines.push({
       date: fp.date,
-      description: `Fire: ${fp.productName || '?'} (${gramsLost}g, ${hoursLost}sa)`,
+      description: `Fire: ${fp.productName||'?'} (${gramsLost}g, ${hoursLost}sa)`,
       amount: total,
-      person: 'F' // fire üreticide
+      splitLabel: 'Filament/Fire → F+H',
+      F: total * 0.5,
+      H: total * 0.5
     });
   });
 
-  // 3) Net kar
+  // 3) Sipariş bazlı maliyetleri gider toplamına ekle (dönem giderlerine ek olarak)
+  const totalOrderCosts = orderLines.reduce((s,o) => s + o.orderCost, 0);
+  const totalExpenses = totalPeriodExpenses + totalOrderCosts;
   const netProfit = totalRevenue - totalExpenses;
 
-  // 4) Kişi başı işçilik (ücret) = F'e yazılan giderler içindeki işçilik
-  // (Sistem giderleri zaten kişiye göre bölünmüş durumda)
+  // 4) Gider kişi dağılımı (dönem giderleri)
+  let expenseF = expenseLines.reduce((s,e) => s + e.F, 0);
+  let expenseH = expenseLines.reduce((s,e) => s + e.H, 0);
 
-  // 5) Kar paylaşımı hesabı
-  // Her sipariş için:
-  //   - Siparişi alan belli -> o kişi %50, diğerleri %25
-  //   - Belli değil -> 3'e eşit (%33.33)
+  // Sipariş maliyetleri dağılımı:
+  // Filament → F+H eşit, Elektrik → sadece F
+  const orderFilamentTotal = orderLines.reduce((s,o) => s + o.orderFilament, 0);
+  const orderElectricTotal = orderLines.reduce((s,o) => s + o.orderElectric, 0);
+  expenseF += orderElectricTotal + orderFilamentTotal * 0.5;
+  expenseH += orderFilamentTotal * 0.5;
+
+  // 5) Kar paylaşımı: Net kar siparişler arasında gelire oranla bölünür
   const shares = { F: 0, H: 0, ALAN: 0, ALAN_NAME: {} };
 
   orderLines.forEach(ol => {
-    const orderShare = netProfit === 0 ? 0 : (ol.revenue / (totalRevenue || 1)) * netProfit;
+    const orderNetShare = totalRevenue > 0
+      ? (ol.revenue / totalRevenue) * netProfit
+      : 0;
     const taken = ol.takenBy;
-    const knownPartners = ['F', 'H'];
-    const isKnownPartner = taken && knownPartners.includes(taken);
-    const isOther = taken && !isKnownPartner; // F veya H dışında biri aldıysa
+    const isF = taken === 'F';
+    const isH = taken === 'H';
+    const isKnown = isF || isH;
+    const isOther = taken && !isKnown;
 
-    if(!taken || (!isKnownPartner && !isOther)){
-      // Belli değil — 3'e böl
-      shares.F += orderShare * (1/3);
-      shares.H += orderShare * (1/3);
-      shares.ALAN += orderShare * (1/3);
-      const k = 'Belirsiz';
-      shares.ALAN_NAME[k] = (shares.ALAN_NAME[k]||0) + orderShare * (1/3);
+    if(!taken && !isOther){
+      shares.F += orderNetShare * (1/3);
+      shares.H += orderNetShare * (1/3);
+      shares.ALAN += orderNetShare * (1/3);
+      shares.ALAN_NAME['Belirsiz'] = (shares.ALAN_NAME['Belirsiz']||0) + orderNetShare * (1/3);
+    } else if(isF){
+      shares.F += orderNetShare * 0.75; // F: üretici %25 + alan %50
+      shares.H += orderNetShare * 0.25;
+    } else if(isH){
+      shares.H += orderNetShare * 0.75;
+      shares.F += orderNetShare * 0.25;
     } else {
-      // F veya H aldıysa o kişi %50, diğer partner %25, "3. kişi" %25
-      const takerShare = orderShare * 0.5;
-      const otherPartnerShare = orderShare * 0.25;
-      const thirdShare = orderShare * 0.25;
-
-      if(taken === 'F'){
-        shares.F += takerShare + otherPartnerShare; // F hem üretici hem alan
-        shares.H += otherPartnerShare;
-        shares.ALAN += thirdShare;
-        shares.ALAN_NAME['F'] = (shares.ALAN_NAME['F']||0) + thirdShare;
-      } else if(taken === 'H'){
-        shares.H += takerShare;
-        shares.F += otherPartnerShare; // F üretici olarak
-        shares.ALAN += thirdShare;
-        const k = 'H';
-        shares.ALAN_NAME[k] = (shares.ALAN_NAME[k]||0) + thirdShare;
-      } else {
-        // Başka biri (örn. 'A') aldı
-        shares.F += otherPartnerShare;
-        shares.H += otherPartnerShare;
-        shares.ALAN += takerShare;
-        shares.ALAN_NAME[taken] = (shares.ALAN_NAME[taken]||0) + takerShare;
-      }
+      shares.F += orderNetShare * 0.25;
+      shares.H += orderNetShare * 0.25;
+      shares.ALAN += orderNetShare * 0.5;
+      shares.ALAN_NAME[taken] = (shares.ALAN_NAME[taken]||0) + orderNetShare * 0.5;
     }
   });
 
   return {
     totalRevenue,
     totalExpenses,
+    totalPeriodExpenses,
+    totalOrderCosts,
+    expenseF,
+    expenseH,
     netProfit,
     shares,
     orderLines,
@@ -5476,72 +5524,95 @@ function renderPartnershipView(){
       </select>
     </div>
 
-    <p style="font-size:12px; color:var(--ink-soft); margin:0 0 20px;">
-      Sadece <strong>teslim edilmiş</strong> siparişler gelir olarak sayılır. Filament, fire ve tüm giderler düşüldükten sonraki net kar paylaşılır.
-      Siparişi alan belli ise <strong>%50</strong>, diğer iki ortak <strong>%25</strong> alır. Alan belli değilse kar üçe eşit bölünür.
+    <p style="font-size:12px; color:var(--ink-soft); margin:0 0 20px; line-height:1.6;">
+      Sadece <strong>teslim edilmiş</strong> siparişlerin gelirleri sayılır.
+      Sipariş maliyeti (filament + elektrik) ve dönem giderleri net kardan düşülür.
+      <br>🔵 Elektrik / işletme → <strong>F</strong> &nbsp;|&nbsp;
+      🟣 Filament / fire → <strong>F + H eşit</strong> &nbsp;|&nbsp;
+      Sipariş alındıysa o kişi <strong>%50</strong>, diğerleri <strong>%25</strong>.
     </p>
 
     <div class="finance-cards" style="margin-bottom:20px;">
-      <div class="fcard income"><div class="fl">Toplam Gelir <span style="font-size:11px; opacity:.7;">(teslim)</span></div><div class="fn">${fmtMoney(r.totalRevenue)}</div></div>
-      <div class="fcard expense"><div class="fl">Toplam Gider + Fire</div><div class="fn">${fmtMoney(r.totalExpenses)}</div></div>
+      <div class="fcard income"><div class="fl">Toplam Gelir <span style="font-size:11px;opacity:.7;">(teslim)</span></div><div class="fn">${fmtMoney(r.totalRevenue)}</div></div>
+      <div class="fcard expense"><div class="fl">Üretim Maliyeti</div><div class="fn" style="font-size:14px;">${fmtMoney(r.totalOrderCosts)}</div></div>
+      <div class="fcard expense"><div class="fl">Dönem Giderleri</div><div class="fn" style="font-size:14px;">${fmtMoney(r.totalPeriodExpenses)}</div></div>
       <div class="fcard net"><div class="fl">Net Kar (Paylaşılacak)</div><div class="fn ${r.netProfit>=0?'net-pos':'net-neg'}">${fmtMoney(r.netProfit)}</div></div>
     </div>
 
-    <div class="finance-section-title">Kişi Payları — ${escapeHtml(monthLabel)}</div>
+    <div class="finance-section-title">Gider Kişi Dağılımı — ${escapeHtml(monthLabel)}</div>
     <div class="ledger-table" style="margin-bottom:24px;">
       <table>
-        <thead><tr><th>Ortak</th><th>Rol</th><th>Pay Oranı</th><th>Tutar</th></tr></thead>
+        <thead><tr><th>Ortak</th><th>Gider Türü</th><th>Üstlendiği Gider</th></tr></thead>
         <tbody>
           <tr>
             <td><span class="taken-chip">F</span></td>
-            <td style="font-size:13px; color:var(--ink-soft);">Üretici + Sermaye</td>
-            <td>Değişken</td>
+            <td style="font-size:13px; color:var(--ink-soft);">Elektrik/İşletme (tümü) + Filament/Fire (%50) + Üretim işçiliği</td>
+            <td><span class="amount" style="color:var(--rust);">${fmtMoney(r.expenseF)}</span></td>
+          </tr>
+          <tr>
+            <td><span class="taken-chip">H</span></td>
+            <td style="font-size:13px; color:var(--ink-soft);">Filament/Fire (%50) + Sermaye giderleri</td>
+            <td><span class="amount" style="color:var(--rust);">${fmtMoney(r.expenseH)}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="finance-section-title">Net Kar Payları — ${escapeHtml(monthLabel)}</div>
+    <div class="ledger-table" style="margin-bottom:24px;">
+      <table>
+        <thead><tr><th>Ortak</th><th>Rol</th><th>Net Kar Payı</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="taken-chip">F</span></td>
+            <td style="font-size:13px; color:var(--ink-soft);">Üretici + Sermaye (belli ise sipariş payı dahil)</td>
             <td><span class="amount net-pos">${fmtMoney(r.shares.F)}</span></td>
           </tr>
           <tr>
             <td><span class="taken-chip">H</span></td>
-            <td style="font-size:13px; color:var(--ink-soft);">Sermaye</td>
-            <td>Değişken</td>
+            <td style="font-size:13px; color:var(--ink-soft);">Sermaye (belli ise sipariş payı dahil)</td>
             <td><span class="amount net-pos">${fmtMoney(r.shares.H)}</span></td>
           </tr>
           <tr>
             <td><span class="taken-chip">Sipariş Alan</span></td>
             <td style="font-size:13px; color:var(--ink-soft);">${alanBreakdown}</td>
-            <td>%50 (alan) / ⅓ (belirsiz)</td>
             <td><span class="amount net-pos">${fmtMoney(r.shares.ALAN)}</span></td>
           </tr>
           <tr style="background:var(--gold-soft);">
-            <td colspan="3"><strong>Toplam</strong></td>
+            <td colspan="2"><strong>Toplam</strong></td>
             <td><span class="amount">${fmtMoney(r.shares.F + r.shares.H + r.shares.ALAN)}</span></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div class="finance-section-title">Sipariş Detayı (Teslim Edilenler)</div>
-    <div class="ledger-table" style="margin-bottom:24px;">
-      ${r.orderLines.length === 0 ? `<div class="empty-state">${iconInbox()}<p class="stamp">Bu dönemde teslim edilmiş sipariş yok</p></div>` : `
-      <table>
-        <thead><tr><th>Sipariş No</th><th>Müşteri</th><th>Alan</th><th>Tahsil</th><th>F Payı</th><th>H Payı</th><th>Alan Payı</th></tr></thead>
+    <div class="finance-section-title">Sipariş Bazlı Maliyet ve Kar Detayı</div>
+    <div class="ledger-table" style="margin-bottom:24px; overflow-x:auto;">
+      ${r.orderLines.length === 0
+        ? `<div class="empty-state">${iconInbox()}<p class="stamp">Bu dönemde teslim edilmiş sipariş yok</p></div>`
+        : `<table>
+        <thead><tr>
+          <th>Sipariş No</th><th>Müşteri</th><th>Alan</th>
+          <th>Gelir</th><th>Filament</th><th>Elektrik</th><th>Net</th>
+          <th>F Payı</th><th>H Payı</th><th>Alan Payı</th>
+        </tr></thead>
         <tbody>
           ${r.orderLines.map(ol => {
-            const orderShare = r.netProfit === 0 ? 0 : (ol.revenue / (r.totalRevenue||1)) * r.netProfit;
+            const orderNetShare = r.totalRevenue > 0 ? (ol.revenue / r.totalRevenue) * r.netProfit : 0;
             const taken = (ol.takenBy||'').trim();
             let fP, hP, aP;
-            if(!taken || (taken !== 'F' && taken !== 'H' && taken === '')){
-              fP = hP = aP = orderShare/3;
-            } else if(taken === 'F'){
-              fP = orderShare * 0.75; hP = orderShare * 0.25; aP = 0;
-            } else if(taken === 'H'){
-              fP = orderShare * 0.25; hP = orderShare * 0.75; aP = 0;
-            } else {
-              fP = orderShare * 0.25; hP = orderShare * 0.25; aP = orderShare * 0.5;
-            }
+            if(!taken){ fP = hP = aP = orderNetShare/3; }
+            else if(taken==='F'){ fP = orderNetShare*0.75; hP = orderNetShare*0.25; aP = 0; }
+            else if(taken==='H'){ hP = orderNetShare*0.75; fP = orderNetShare*0.25; aP = 0; }
+            else { fP = orderNetShare*0.25; hP = orderNetShare*0.25; aP = orderNetShare*0.5; }
             return `<tr>
               <td data-label="Sipariş No">${escapeHtml(ol.orderNo||'-')}</td>
               <td data-label="Müşteri" class="cust-name">${escapeHtml(ol.customerName||'-')}</td>
               <td data-label="Alan"><span class="taken-chip">${escapeHtml(ol.takenBy||'?')}</span></td>
-              <td data-label="Tahsil"><span class="amount">${fmtMoney(ol.revenue)}</span></td>
+              <td data-label="Gelir"><span class="amount">${fmtMoney(ol.revenue)}</span></td>
+              <td data-label="Filament"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ol.orderFilament)}</span></td>
+              <td data-label="Elektrik"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ol.orderElectric)}</span></td>
+              <td data-label="Net"><span class="amount ${orderNetShare>=0?'net-pos':'net-neg'}">${fmtMoney(orderNetShare)}</span></td>
               <td data-label="F Payı"><span class="amount net-pos">${fmtMoney(fP)}</span></td>
               <td data-label="H Payı"><span class="amount net-pos">${fmtMoney(hP)}</span></td>
               <td data-label="Alan Payı"><span class="amount net-pos">${fmtMoney(aP)}</span></td>
@@ -5551,17 +5622,20 @@ function renderPartnershipView(){
       </table>`}
     </div>
 
-    <div class="finance-section-title">Gider ve Fire Detayı</div>
+    <div class="finance-section-title">Dönem Gider Detayı (Kişi Dağılımı)</div>
     <div class="ledger-table">
-      ${r.expenseLines.length === 0 ? `<div class="empty-state">${iconInbox()}<p class="stamp">Bu dönemde gider kaydı yok</p></div>` : `
-      <table>
-        <thead><tr><th>Tarih</th><th>Kişi</th><th>Açıklama</th><th>Tutar</th></tr></thead>
+      ${r.expenseLines.length === 0
+        ? `<div class="empty-state">${iconInbox()}<p class="stamp">Bu dönemde gider kaydı yok</p></div>`
+        : `<table>
+        <thead><tr><th>Tarih</th><th>Açıklama</th><th>Tür / Dağılım</th><th>Toplam</th><th>→ F</th><th>→ H</th></tr></thead>
         <tbody>
           ${r.expenseLines.map(ex => `<tr>
             <td data-label="Tarih">${fmtDate(ex.date)}</td>
-            <td data-label="Kişi"><span class="taken-chip">${escapeHtml(ex.person)}</span></td>
             <td data-label="Açıklama">${escapeHtml(ex.description)}</td>
-            <td data-label="Tutar"><span class="amount" style="color:var(--rust);">${fmtMoney(ex.amount)}</span></td>
+            <td data-label="Dağılım" style="font-size:12px; color:var(--ink-soft);">${escapeHtml(ex.splitLabel)}</td>
+            <td data-label="Toplam"><span class="amount" style="color:var(--rust);">${fmtMoney(ex.amount)}</span></td>
+            <td data-label="→ F"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ex.F)}</span></td>
+            <td data-label="→ H"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ex.H)}</span></td>
           </tr>`).join('')}
         </tbody>
       </table>`}
