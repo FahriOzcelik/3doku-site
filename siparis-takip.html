@@ -985,7 +985,7 @@ function migrateStatus(s){
   return STATUS_MIGRATION[s] || 'beklemede';
 }
 
-const TAKEN_BY = ['F','A','H'];
+const TAKEN_BY = ['F','H','A','Belirsiz'];
 
 let state = {
   businessName: "3D Baskı Atölyem",
@@ -2295,14 +2295,14 @@ function setProductionFilter(f){
 
 // ---------- Ürünler Kataloğu ----------
 function openNewProductModal(){
-  state.productModal = { mode:'new', product:{ id:null, name:'', price:0, stock:0, gramPerUnit:0, printHoursPerUnit:0 } };
+  state.productModal = { mode:'new', product:{ id:null, name:'', price:0, stock:0, gramPerUnit:0, printHoursPerUnit:0, laborHoursPerUnit:0, machineRatePerHour:0, fireRatePct:0, profitMarginPct:30 } };
   render();
   setTimeout(()=>document.getElementById('p-name')?.focus(), 50);
 }
 function openEditProductModal(id){
   const p = state.products.find(x=>x.id===id);
   if(!p) return;
-  state.productModal = { mode:'edit', product:{ stock:0, gramPerUnit:0, printHoursPerUnit:0, ...p} };
+  state.productModal = { mode:'edit', product:{ stock:0, gramPerUnit:0, printHoursPerUnit:0, laborHoursPerUnit:0, machineRatePerHour:0, fireRatePct:0, profitMarginPct:30, ...p} };
   render();
   setTimeout(()=>document.getElementById('p-name')?.focus(), 50);
 }
@@ -2321,18 +2321,27 @@ async function submitProductModal(e){
   if(isNaN(gramPerUnit) || gramPerUnit<0) gramPerUnit = 0;
   let printHoursPerUnit = parseFloat(f.printHoursPerUnit.value);
   if(isNaN(printHoursPerUnit) || printHoursPerUnit<0) printHoursPerUnit = 0;
+  let laborHoursPerUnit = parseFloat(f.laborHoursPerUnit.value);
+  if(isNaN(laborHoursPerUnit) || laborHoursPerUnit<0) laborHoursPerUnit = 0;
+  let machineRatePerHour = parseFloat(f.machineRatePerHour.value);
+  if(isNaN(machineRatePerHour) || machineRatePerHour<0) machineRatePerHour = 0;
+  let fireRatePct = parseFloat(f.fireRatePct.value);
+  if(isNaN(fireRatePct) || fireRatePct<0) fireRatePct = 0;
+  let profitMarginPct = parseFloat(f.profitMarginPct.value);
+  if(isNaN(profitMarginPct) || profitMarginPct<0) profitMarginPct = 0;
   if(!name || isNaN(price) || price<0){
     showToast("Lütfen ürün adı ve geçerli bir fiyat girin.");
     return;
   }
+  const costFields = { gramPerUnit, printHoursPerUnit, laborHoursPerUnit, machineRatePerHour, fireRatePct, profitMarginPct };
   if(state.productModal.mode === 'new'){
-    const product = { id:'p_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, price, stock, gramPerUnit, printHoursPerUnit };
+    const product = { id:'p_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, price, stock, ...costFields };
     state.products.push(product);
     showToast("Ürün eklendi — " + product.name);
   } else {
     const idx = state.products.findIndex(x=>x.id===state.productModal.product.id);
     if(idx>-1){
-      state.products[idx] = {...state.products[idx], name, price, stock, gramPerUnit, printHoursPerUnit};
+      state.products[idx] = {...state.products[idx], name, price, stock, ...costFields};
       // Bu ürüne referans veren sipariş satırlarında görünen adı da güncelle
       state.orders.forEach(o=>{
         (o.items||[]).forEach(it=>{
@@ -3548,15 +3557,58 @@ function renderProductModal(){
           </div>
           <div class="field-row">
             <div class="field">
-              <label for="p-grams">1 Adet için Filament (gram)</label>
-              <input id="p-grams" name="gramPerUnit" type="number" min="0" step="0.1" value="${p.gramPerUnit||0}" title="Bu ürünün 1 adedini basmak için gereken filament miktarı">
+              <label for="p-grams">1 Adet Filament (gram)</label>
+              <input id="p-grams" name="gramPerUnit" type="number" min="0" step="0.1" value="${p.gramPerUnit||0}">
             </div>
             <div class="field">
-              <label for="p-hours">1 Adet için Baskı Süresi (saat)</label>
-              <input id="p-hours" name="printHoursPerUnit" type="number" min="0" step="0.1" value="${p.printHoursPerUnit||0}" title="Bu ürünün 1 adedini basmak için gereken süre">
+              <label for="p-fire">Fire Oranı (%)</label>
+              <input id="p-fire" name="fireRatePct" type="number" min="0" max="100" step="0.1" value="${p.fireRatePct||0}" title="Üretim filamentinin yüzde kaçı fire olarak kaybolur">
             </div>
           </div>
-          <p style="font-size:11.5px; color:var(--ink-soft); margin:-8px 0 16px;">Bu iki bilgi girilirse: filament stoğu siparişten otomatik düşer, yazıcı kapasitesi hesaplanır ve gerçek kârlılık raporu oluşur.</p>
+          <div class="field-row">
+            <div class="field">
+              <label for="p-hours">Baskı Süresi (saat)</label>
+              <input id="p-hours" name="printHoursPerUnit" type="number" min="0" step="0.1" value="${p.printHoursPerUnit||0}" title="Elektrik maliyeti buradan hesaplanır — F'ye yazar">
+            </div>
+            <div class="field">
+              <label for="p-labor">İşçilik Süresi (saat)</label>
+              <input id="p-labor" name="laborHoursPerUnit" type="number" min="0" step="0.1" value="${p.laborHoursPerUnit||0}" title="F'nin işçilik süresi — F'ye yazar">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="p-machine">Makine Ücreti (TL/saat)</label>
+              <input id="p-machine" name="machineRatePerHour" type="number" min="0" step="0.1" value="${p.machineRatePerHour||0}" title="Baskı saatiyle çarpılır — elektrik gibi F'ye yazar">
+            </div>
+            <div class="field">
+              <label for="p-margin">Kar Marjı (%)</label>
+              <input id="p-margin" name="profitMarginPct" type="number" min="0" step="1" value="${p.profitMarginPct||0}" title="Önerilen satış fiyatı hesabı için">
+            </div>
+          </div>
+          <div class="field" style="background:var(--gold-soft); border-radius:8px; padding:10px 12px; font-size:12px; color:var(--ink-soft);">
+            ${(()=>{
+              const mat = state.materials && state.materials[0];
+              const pricePerKg = mat ? (Number(mat.pricePerKg)||0) : 0;
+              const gram = Number(p.gramPerUnit)||0;
+              const fire = Number(p.fireRatePct)||0;
+              const printH = Number(p.printHoursPerUnit)||0;
+              const laborH = Number(p.laborHoursPerUnit)||0;
+              const machineR = Number(p.machineRatePerHour)||0;
+              const margin = Number(p.profitMarginPct)||0;
+              const elRate = Number(state.costCalc?.electricityRate)||0;
+              const watts = Number(state.costCalc?.printerWatts)||0;
+              const laborRate = Number(state.costCalc?.laborHourRate)||0;
+              const filamentCost = (gram * (1 + fire/100) / 1000) * pricePerKg;
+              const electricCost = printH * (watts/1000) * elRate;
+              const machineCost = printH * machineR;
+              const laborCost = laborH * laborRate;
+              const totalCost = filamentCost + electricCost + machineCost + laborCost;
+              const suggested = totalCost * (1 + margin/100);
+              if(totalCost <= 0) return '💡 Maliyetleri girince önerilen fiyat burada görünür.';
+              return `💡 <b>Maliyet özeti:</b> Filament ${fmtMoney(filamentCost)} · Elektrik+Makine ${fmtMoney(electricCost+machineCost)} · İşçilik ${fmtMoney(laborCost)} · <b>Toplam ${fmtMoney(totalCost)}</b> · Önerilen fiyat (%${margin} marj) <b>${fmtMoney(suggested)}</b>`;
+            })()}
+          </div>
+          <p style="font-size:11px; color:var(--ink-soft); margin:6px 0 0;">Elektrik ücreti ve işçilik saatini Maliyet Hesaplayıcı sayfasından girebilirsiniz.</p>
         </div>
         <div class="modal-foot">
           <button type="button" class="btn-secondary" onclick="closeProductModal()">Vazgeç</button>
@@ -5360,22 +5412,36 @@ function computePartnershipReport(filterMonth){
     if(!inMonth(o.orderDate)) return;
     const revenue = Number(o.paidAmount) || 0;
 
-    // Siparişe özgü üretim maliyeti (filament + elektrik)
-    let orderFilament = 0; // filament maliyeti → F+H eşit
-    let orderElectric = 0; // elektrik/işletme  → sadece F
+    // Siparişe özgü maliyet hesabı
+    let orderFilament = 0; // filament + fire → F+H eşit
+    let orderMachine = 0;  // makine → F+H eşit
+    let orderElectric = 0; // elektrik → sadece F
+    let orderLabor = 0;    // işçilik  → sadece F
 
     (o.items||[]).forEach(it => {
       const product = state.products && state.products.find(p => p.id === it.productId);
       if(!product) return;
       const qty = itemQuantity(it);
       const gramPerUnit = Number(product.gramPerUnit)||0;
-      const hoursPerUnit = Number(product.printHoursPerUnit)||0;
+      const fireRatePct = Number(product.fireRatePct)||0;
+      const printHoursPerUnit = Number(product.printHoursPerUnit)||0;
+      const laborHoursPerUnit = Number(product.laborHoursPerUnit)||0;
+      const machineRatePerHour = Number(product.machineRatePerHour)||0;
+
       const material = it.materialId
         ? (state.materials && state.materials.find(m => m.id === it.materialId))
-        : null;
+        : (state.materials && state.materials[0]);
       const pricePerKg = material ? (Number(material.pricePerKg)||0) : 0;
-      orderFilament += (gramPerUnit * qty / 1000) * pricePerKg;
-      orderElectric += hoursPerUnit * qty * hourlyOperatingCost();
+
+      // Filament (fire dahil): gram × (1 + fire%) / 1000 × fiyat/kg
+      orderFilament += (gramPerUnit * (1 + fireRatePct/100) / 1000) * pricePerKg * qty;
+      // Makine: baskı saati × makine ücreti/saat
+      orderMachine += printHoursPerUnit * machineRatePerHour * qty;
+      // Elektrik: baskı saati × elektrik maliyeti/saat
+      orderElectric += printHoursPerUnit * hourlyOperatingCost() * qty;
+      // İşçilik: işçilik saati × işçilik ücreti/saat
+      const laborRate = Number(state.costCalc?.laborHourRate)||0;
+      orderLabor += laborHoursPerUnit * laborRate * qty;
     });
 
     totalRevenue += revenue;
@@ -5384,9 +5450,11 @@ function computePartnershipReport(filterMonth){
       customerName: o.customerName,
       revenue,
       takenBy: (o.takenBy || '').trim() || null,
-      orderFilament,
-      orderElectric,
-      orderCost: orderFilament + orderElectric,
+      orderFilament,  // → F+H eşit
+      orderMachine,   // → F+H eşit
+      orderElectric,  // → sadece F
+      orderLabor,     // → sadece F
+      orderCost: orderFilament + orderMachine + orderElectric + orderLabor,
     });
   });
 
@@ -5442,11 +5510,15 @@ function computePartnershipReport(filterMonth){
   let expenseH = expenseLines.reduce((s,e) => s + e.H, 0);
 
   // Sipariş maliyetleri dağılımı:
-  // Filament → F+H eşit, Elektrik → sadece F
+  // Filament + Fire + Makine → F+H eşit
+  // Elektrik + İşçilik → sadece F
   const orderFilamentTotal = orderLines.reduce((s,o) => s + o.orderFilament, 0);
+  const orderMachineTotal = orderLines.reduce((s,o) => s + o.orderMachine, 0);
   const orderElectricTotal = orderLines.reduce((s,o) => s + o.orderElectric, 0);
-  expenseF += orderElectricTotal + orderFilamentTotal * 0.5;
-  expenseH += orderFilamentTotal * 0.5;
+  const orderLaborTotal = orderLines.reduce((s,o) => s + o.orderLabor, 0);
+
+  expenseF += orderElectricTotal + orderLaborTotal + (orderFilamentTotal + orderMachineTotal) * 0.5;
+  expenseH += (orderFilamentTotal + orderMachineTotal) * 0.5;
 
   // 5) Kar paylaşımı: Net kar siparişler arasında gelire oranla bölünür
   const shares = { F: 0, H: 0, ALAN: 0, ALAN_NAME: {} };
@@ -5455,13 +5527,14 @@ function computePartnershipReport(filterMonth){
     const orderNetShare = totalRevenue > 0
       ? (ol.revenue / totalRevenue) * netProfit
       : 0;
-    const taken = ol.takenBy;
+    const taken = (ol.takenBy || '').trim();
     const isF = taken === 'F';
     const isH = taken === 'H';
-    const isKnown = isF || isH;
-    const isOther = taken && !isKnown;
+    const isA = taken === 'A';
+    const isBelirsiz = !taken || taken === 'Belirsiz';
 
-    if(!taken && !isOther){
+    if(isBelirsiz){
+      // Belli değil — F, H, A eşit üçe böl
       shares.F += orderNetShare * (1/3);
       shares.H += orderNetShare * (1/3);
       shares.ALAN += orderNetShare * (1/3);
@@ -5472,7 +5545,14 @@ function computePartnershipReport(filterMonth){
     } else if(isH){
       shares.H += orderNetShare * 0.75;
       shares.F += orderNetShare * 0.25;
+    } else if(isA){
+      // A siparişi aldı: A %50, F %25, H %25
+      shares.F += orderNetShare * 0.25;
+      shares.H += orderNetShare * 0.25;
+      shares.ALAN += orderNetShare * 0.5;
+      shares.ALAN_NAME['A'] = (shares.ALAN_NAME['A']||0) + orderNetShare * 0.5;
     } else {
+      // Başka biri
       shares.F += orderNetShare * 0.25;
       shares.H += orderNetShare * 0.25;
       shares.ALAN += orderNetShare * 0.5;
@@ -5546,7 +5626,7 @@ function renderPartnershipView(){
         <tbody>
           <tr>
             <td><span class="taken-chip">F</span></td>
-            <td style="font-size:13px; color:var(--ink-soft);">Elektrik/İşletme (tümü) + Filament/Fire (%50) + Üretim işçiliği</td>
+            <td style="font-size:13px; color:var(--ink-soft);">Elektrik/İşletme (tümü) + Filament/Fire+Makine (%50) + İşçilik · A sadece kardan pay alır, gidere katılmaz</td>
             <td><span class="amount" style="color:var(--rust);">${fmtMoney(r.expenseF)}</span></td>
           </tr>
           <tr>
@@ -5593,7 +5673,7 @@ function renderPartnershipView(){
         : `<table>
         <thead><tr>
           <th>Sipariş No</th><th>Müşteri</th><th>Alan</th>
-          <th>Gelir</th><th>Filament</th><th>Elektrik</th><th>Net</th>
+          <th>Gelir</th><th>Filament+Fire</th><th>Makine</th><th>Elektrik</th><th>İşçilik</th><th>Net</th>
           <th>F Payı</th><th>H Payı</th><th>Alan Payı</th>
         </tr></thead>
         <tbody>
@@ -5601,17 +5681,19 @@ function renderPartnershipView(){
             const orderNetShare = r.totalRevenue > 0 ? (ol.revenue / r.totalRevenue) * r.netProfit : 0;
             const taken = (ol.takenBy||'').trim();
             let fP, hP, aP;
-            if(!taken){ fP = hP = aP = orderNetShare/3; }
+            if(!taken || taken==='Belirsiz'){ fP = hP = aP = orderNetShare/3; }
             else if(taken==='F'){ fP = orderNetShare*0.75; hP = orderNetShare*0.25; aP = 0; }
             else if(taken==='H'){ hP = orderNetShare*0.75; fP = orderNetShare*0.25; aP = 0; }
-            else { fP = orderNetShare*0.25; hP = orderNetShare*0.25; aP = orderNetShare*0.5; }
+            else { fP = orderNetShare*0.25; hP = orderNetShare*0.25; aP = orderNetShare*0.5; } // A veya diğer
             return `<tr>
               <td data-label="Sipariş No">${escapeHtml(ol.orderNo||'-')}</td>
               <td data-label="Müşteri" class="cust-name">${escapeHtml(ol.customerName||'-')}</td>
               <td data-label="Alan"><span class="taken-chip">${escapeHtml(ol.takenBy||'?')}</span></td>
               <td data-label="Gelir"><span class="amount">${fmtMoney(ol.revenue)}</span></td>
-              <td data-label="Filament"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ol.orderFilament)}</span></td>
+              <td data-label="Filament+Fire"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ol.orderFilament)}</span></td>
+              <td data-label="Makine"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ol.orderMachine)}</span></td>
               <td data-label="Elektrik"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ol.orderElectric)}</span></td>
+              <td data-label="İşçilik"><span class="amount" style="color:var(--rust);font-size:12px;">${fmtMoney(ol.orderLabor)}</span></td>
               <td data-label="Net"><span class="amount ${orderNetShare>=0?'net-pos':'net-neg'}">${fmtMoney(orderNetShare)}</span></td>
               <td data-label="F Payı"><span class="amount net-pos">${fmtMoney(fP)}</span></td>
               <td data-label="H Payı"><span class="amount net-pos">${fmtMoney(hP)}</span></td>
