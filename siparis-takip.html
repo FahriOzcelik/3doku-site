@@ -5408,9 +5408,13 @@ function computePartnershipReport(filterMonth){
   const orderLines = [];
 
   state.orders.forEach(o => {
-    if(o.status !== 'teslim') return;
+    // Sadece tam ödenenler kar paylaşımına girer
+    const orderTotal = (o.items||[]).reduce((s,it) => s + itemQuantity(it) * (Number(it.unitPrice)||0), 0);
+    const paid = Number(o.paidAmount) || 0;
+    const fullyPaid = orderTotal > 0 && paid >= orderTotal;
+    if(!fullyPaid) return;
     if(!inMonth(o.orderDate)) return;
-    const revenue = Number(o.paidAmount) || 0;
+    const revenue = paid;
 
     // Siparişe özgü maliyet hesabı
     let orderFilament = 0; // filament + fire → F+H eşit
@@ -5604,12 +5608,12 @@ function renderPartnershipView(){
       </select>
     </div>
 
-    <p style="font-size:12px; color:var(--ink-soft); margin:0 0 20px; line-height:1.6;">
-      Sadece <strong>teslim edilmiş</strong> siparişlerin gelirleri sayılır.
-      Sipariş maliyeti (filament + elektrik) ve dönem giderleri net kardan düşülür.
-      <br>🔵 Elektrik / işletme → <strong>F</strong> &nbsp;|&nbsp;
-      🟣 Filament / fire → <strong>F + H eşit</strong> &nbsp;|&nbsp;
-      Sipariş alındıysa o kişi <strong>%50</strong>, diğerleri <strong>%25</strong>.
+    <p style="font-size:12px; color:var(--ink-soft); margin:0 0 20px; line-height:1.8; background:var(--gold-soft); border-radius:10px; padding:12px 16px;">
+      <strong>Gider kuralları:</strong><br>
+      🟣 Filament + Fire + Makine → <strong>F ve H eşit (%50/%50)</strong><br>
+      🔵 İşçilik + Elektrik → <strong>Sadece F</strong><br>
+      <strong>Kar kuralları:</strong><br>
+      Siparişi alan belli → alan <strong>%50</strong>, diğer iki ortak <strong>%25</strong> | Belirsiz → F, A, H <strong>eşit ⅓</strong>
     </p>
 
     <div class="finance-cards" style="margin-bottom:20px;">
@@ -5619,20 +5623,25 @@ function renderPartnershipView(){
       <div class="fcard net"><div class="fl">Net Kar (Paylaşılacak)</div><div class="fn ${r.netProfit>=0?'net-pos':'net-neg'}">${fmtMoney(r.netProfit)}</div></div>
     </div>
 
-    <div class="finance-section-title">Gider Kişi Dağılımı — ${escapeHtml(monthLabel)}</div>
+    <div class="finance-section-title">Gider Dağılımı — ${escapeHtml(monthLabel)}</div>
     <div class="ledger-table" style="margin-bottom:24px;">
       <table>
-        <thead><tr><th>Ortak</th><th>Gider Türü</th><th>Üstlendiği Gider</th></tr></thead>
+        <thead><tr><th>Ortak</th><th>Üstlendiği Giderler</th><th>Tutar</th></tr></thead>
         <tbody>
           <tr>
             <td><span class="taken-chip">F</span></td>
-            <td style="font-size:13px; color:var(--ink-soft);">Elektrik/İşletme (tümü) + Filament/Fire+Makine (%50) + İşçilik · A sadece kardan pay alır, gidere katılmaz</td>
+            <td style="font-size:13px; color:var(--ink-soft);">Filament + Fire + Makine (%50) &amp; İşçilik + Elektrik (%100)</td>
             <td><span class="amount" style="color:var(--rust);">${fmtMoney(r.expenseF)}</span></td>
           </tr>
           <tr>
             <td><span class="taken-chip">H</span></td>
-            <td style="font-size:13px; color:var(--ink-soft);">Filament/Fire (%50) + Sermaye giderleri</td>
+            <td style="font-size:13px; color:var(--ink-soft);">Filament + Fire + Makine (%50)</td>
             <td><span class="amount" style="color:var(--rust);">${fmtMoney(r.expenseH)}</span></td>
+          </tr>
+          <tr>
+            <td><span class="taken-chip">A</span></td>
+            <td style="font-size:13px; color:var(--ink-soft);">Giderlere katılmaz — sadece kardan pay alır</td>
+            <td><span class="amount" style="color:var(--ink-soft);">—</span></td>
           </tr>
         </tbody>
       </table>
